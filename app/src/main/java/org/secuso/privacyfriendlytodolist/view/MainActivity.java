@@ -93,7 +93,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private static final String KEY_UNLOCK_UNTIL = "restore_unlock_until_key_with_savedinstancestate";
     public static final String KEY_SELECTED_FRAGMENT_BY_NOTIFICATION = "fragment_choice";
     private static final String KEY_FRAGMENT_CONFIG_CHANGE_SAVE = "current_fragment";
-    private static final String KEY_ACTIVE_LIST = "KEY_ACTIVE_LIST";
 
 
     // Fragment administration
@@ -112,8 +111,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     // Database administration
     private DatabaseHelper dbHelper;
-
-    private SharedPreferences mPref;
 
     // TodoList administration
     private ArrayList<TodoList> todoLists = new ArrayList<>();
@@ -140,7 +137,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private static final long UnlockPeriod = 30000; // keep the app unlocked for 30 seconds after switching to another activity (settings/help/about)
     int affectedRows;
     int notificationDone;
-    private int activeList = -1;
+
 
 
     @Override
@@ -169,12 +166,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 return false;
             }
         });
-
-        MenuItem priotiryGroup = menu.findItem(R.id.ac_group_by_prio);
-        priotiryGroup.setChecked(mPref.getBoolean("PRIORITY", false));
-
-        MenuItem deadlineGroup = menu.findItem(R.id.ac_sort_by_deadline);
-        deadlineGroup.setChecked(mPref.getBoolean("DEADLINE", false));
 
         return super.onCreateOptionsMenu(menu);
     }
@@ -209,29 +200,24 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             case R.id.ac_show_all_tasks:
                 expandableTodoTaskAdapter.setFilter(ExpandableTodoTaskAdapter.Filter.ALL_TASKS);
                 expandableTodoTaskAdapter.notifyDataSetChanged();
-                mPref.edit().putString("FILTER", "ALL_TASKS").commit();
                 return true;
             case R.id.ac_show_open_tasks:
                 expandableTodoTaskAdapter.setFilter(ExpandableTodoTaskAdapter.Filter.OPEN_TASKS);
                 expandableTodoTaskAdapter.notifyDataSetChanged();
-                mPref.edit().putString("FILTER", "OPEN_TASKS").commit();
                 return true;
             case R.id.ac_show_completed_tasks:
                 expandableTodoTaskAdapter.setFilter(ExpandableTodoTaskAdapter.Filter.COMPLETED_TASKS);
                 expandableTodoTaskAdapter.notifyDataSetChanged();
-                mPref.edit().putString("FILTER", "COMPLETED_TASKS").commit();
                 return true;
             case R.id.ac_group_by_prio:
                 checked = !item.isChecked();
                 item.setChecked(checked);
                 sortType = ExpandableTodoTaskAdapter.SortTypes.PRIORITY;
-                mPref.edit().putBoolean("PRIORITY", checked).commit();
                 break;
             case R.id.ac_sort_by_deadline:
                 checked = !item.isChecked();
                 item.setChecked(checked);
                 sortType = ExpandableTodoTaskAdapter.SortTypes.DEADLINE;
-                mPref.edit().putBoolean("DEADLINE", checked).commit();
                 break;
             default:
                 return super.onOptionsItemSelected(item);
@@ -260,13 +246,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         PrefManager prefManager = new PrefManager(this);
         if (prefManager.isFirstTimeLaunch()) {
-            prefManager.setFirstTimeValues(this);
             startTut();
             finish();
         }
 
-        if(savedInstanceState != null) {
-            restore(savedInstanceState);
+        if (savedInstanceState != null) {
+            isUnlocked = savedInstanceState.getBoolean(KEY_IS_UNLOCKED);
+            unlockUntil = savedInstanceState.getLong(KEY_UNLOCK_UNTIL);
         } else {
             isUnlocked = false;
             unlockUntil = -1;
@@ -284,7 +270,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         hints();
 
         dbHelper = DatabaseHelper.getInstance(this);
-        mPref = PreferenceManager.getDefaultSharedPreferences(this);
+        PreferenceManager.setDefaultValues(this, R.xml.settings, false);
 
         //Try to snooze the task by notification
         /*if (savedInstanceState == null) {
@@ -304,10 +290,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         TodoList defaultList = new TodoList();
         defaultList.setDummyList();
         DBQueryHandler.saveTodoListInDb(dbHelper.getWritableDatabase(), defaultList);
-
-        if(activeList != -1) {
-            showTasksOfList(activeList);
-        }
     }
 
 
@@ -320,8 +302,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         outState.putParcelable(KEY_DUMMY_LIST, dummyList);
         outState.putBoolean(KEY_IS_UNLOCKED, isUnlocked);
         outState.putLong(KEY_UNLOCK_UNTIL, unlockUntil);
-        outState.putInt(KEY_ACTIVE_LIST, activeList);
     }
+
+
 
     private void authAndGuiInit(final Bundle savedInstanceState) {
 
@@ -366,23 +349,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         return true;
     }
 
-    @Override
-    protected void onRestoreInstanceState(Bundle savedInstanceState) {
-        super.onRestoreInstanceState(savedInstanceState);
 
-        restore(savedInstanceState);
-    }
-
-    private void restore(Bundle savedInstanceState) {
-        todoLists = savedInstanceState.getParcelableArrayList(KEY_TODO_LISTS);
-        clickedList = savedInstanceState.getParcelable(KEY_CLICKED_LIST);
-        dummyList = savedInstanceState.getParcelable(KEY_DUMMY_LIST);
-        isUnlocked = savedInstanceState.getBoolean(KEY_IS_UNLOCKED);
-        unlockUntil = savedInstanceState.getLong(KEY_UNLOCK_UNTIL);
-        activeList = savedInstanceState.getInt(KEY_ACTIVE_LIST);
-    }
 
     public void initActivity(Bundle savedInstanceState) {
+
         this.isUnlocked = true;
         getTodoLists(true);
 
@@ -537,6 +507,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             if (inList)
                 return false;
         } else{
+            uncheckNavigationEntries();
+            this.inList = true;
             showTasksOfList(id);
             toolbar.setTitle(item.getTitle());
             item.setChecked(true);
@@ -566,21 +538,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     @Override
     protected void onResume() {
-        super.onResume();
-
         if (this.isInitialized && !this.isUnlocked && (this.unlockUntil == -1 || System.currentTimeMillis() > this.unlockUntil)) {
             // restart activity to show pin dialog again
-            //Intent intent = new Intent(this, MainActivity.class);
-            //finish();
-            //startActivity(intent);
+            Intent intent = new Intent(this, MainActivity.class);
+            finish();
+            startActivity(intent);
             if (reminderService == null)
                 bindToReminderService();
+            super.onResume();
             guiSetup();
-            if(activeList == -1) {
-                showAllTasks();
-            } else {
-                showTasksOfList(activeList);
-            }
+            showAllTasks();
             return;
         }
 
@@ -590,7 +557,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         if (reminderService == null) {
             bindToReminderService();
-        };
+        }
+        super.onResume();
 
         Log.i(TAG, "onResume()");
     }
@@ -772,10 +740,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
 
         // set unique database id (primary key) to the current object
-        if (databaseID == -1) {
+        if (databaseID == -1 || databaseID == DBQueryHandler.NO_INSERT_TO_DB) {
             Log.e(TAG, errorMessage);
             return false;
-        } else if (databaseID != DBQueryHandler.NO_CHANGES) {
+        }
+        else if (databaseID != DBQueryHandler.NO_CHANGES) {
             todo.setId(databaseID);
             return true;
         }
@@ -796,7 +765,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
 
 
-    //Adds To do-Lists to the navigation-drawer
+    //Adds Todo-Lists to the navigation-drawer
     private void addListToNav() {
         NavigationView nv = (NavigationView) findViewById(R.id.nav_view);
         Menu navMenu = nv.getMenu();
@@ -824,7 +793,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
 
 
-    // Method to add a new To do-List
+    // Method to add a new Todo-List
     private void startListDialog() {
         dbHelper = DatabaseHelper.getInstance(this);
         todoLists = DBQueryHandler.getAllToDoLists(dbHelper.getReadableDatabase());
@@ -835,13 +804,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             @Override
             public void finish(BaseTodo b) {
                 if (b instanceof TodoList) {
-                    todoLists.add((TodoList) b);
-                    adapter.updateList(todoLists); // run filter again
-                    adapter.notifyDataSetChanged();
-                    sendToDatabase(b);
-                    hints();
-                    addListToNav();
-                    Log.i(TAG, "list added");
+                    if(sendToDatabase(b)) {
+                        todoLists.add((TodoList) b);
+                        adapter.updateList(todoLists); // run filter again
+                        adapter.notifyDataSetChanged();
+
+                        hints();
+                        addListToNav();
+                        Log.i(TAG, "list added");
+                    }
+                    else {
+                        Log.i(TAG, "list not added");
+                    }
                 }
             }
         });
@@ -945,28 +919,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
 
     private void showTasksOfList(int id) {
-
-        uncheckNavigationEntries();
-        this.inList = true;
-
-        if (navigationView != null) {
-            for (int i = 0; i < navigationView.getMenu().size(); i++) {
-                MenuItem item = navigationView.getMenu().getItem(i);
-                item.setChecked(item.getItemId() == id);
-                if(item.getItemId() == id) {
-                    toolbar.setTitle(item.getTitle());
-                }
-            }
-            Log.i(TAG, "Navigation entries unchecked.");
-        }
-
         dbHelper = DatabaseHelper.getInstance(this);
         ArrayList<TodoList> lists;
         ArrayList<TodoTask> help = new ArrayList<TodoTask>();
         lists = DBQueryHandler.getAllToDoLists(dbHelper.getReadableDatabase());
-
-        activeList = id;
-
         for (int i = 0; i < lists.size(); i++) {
             if (id == lists.get(i).getId()) {
                 help.addAll(lists.get(i).getTasks());
@@ -1139,7 +1095,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         Animation anim = new AlphaAnimation(0.0f, 1.0f);
         dbHelper = DatabaseHelper.getInstance(this);
-        if (DBQueryHandler.getAllToDoTasks(dbHelper.getReadableDatabase()).size() == 0 &&
+        if ( DBQueryHandler.getAllToDoTasks(dbHelper.getReadableDatabase()).size() == 0 &&
                 DBQueryHandler.getAllToDoLists(dbHelper.getReadableDatabase()).size() == 0) {
 
             initialAlert.setVisibility(View.VISIBLE);
@@ -1167,5 +1123,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             secondAlert.clearAnimation();
         }
     }
+
+
+
 }
 

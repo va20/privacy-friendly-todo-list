@@ -115,26 +115,8 @@ public class ExpandableTodoTaskAdapter extends BaseExpandableListAdapter {
 
         rawData = tasks;
 
-        String filterString = prefs.getString("FILTER", "ALL_TASKS");
-
-        Filter filter;
-
-        try {
-            filter = Filter.valueOf(filterString);
-        } catch (IllegalArgumentException e) {
-            filter = Filter.ALL_TASKS;
-        }
-
         // default values
-        if(prefs.getBoolean("PRIORITY", false)) {
-            addSortCondition(ExpandableTodoTaskAdapter.SortTypes.PRIORITY);
-        }
-        if(prefs.getBoolean("DEADLINE", false)) {
-            addSortCondition(ExpandableTodoTaskAdapter.SortTypes.DEADLINE);
-        }
-
-        setFilter(filter);
-
+        setFilter(Filter.ALL_TASKS);
         setQueryString(null);
         filterTasks();
     }
