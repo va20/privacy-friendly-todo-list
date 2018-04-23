@@ -451,7 +451,7 @@ public class DBQueryHandler {
             values.put(TTodoList.COLUMN_NAME, todoList.getName());
 
             if(todoList.getDBState() == ObjectStates.INSERT_TO_DB) {
-                returnCode = (int) db.insert(TTodoList.TABLE_NAME, null, values);
+                returnCode = (int) db.insertOrThrow(TTodoList.TABLE_NAME, null, values);
                 Log.d(TAG, "Todo list " + todoList.getName() + " was inserted into the database (return code: "+returnCode+").");
             } else if(todoList.getDBState() == ObjectStates.UPDATE_DB) {
                 String whereClause = TTodoList.COLUMN_ID + "=?";

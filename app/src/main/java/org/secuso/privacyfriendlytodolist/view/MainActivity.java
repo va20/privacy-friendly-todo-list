@@ -302,9 +302,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         authAndGuiInit(savedInstanceState);
         TodoList defaultList = new TodoList();
-        defaultList.setDummyList();
-        DBQueryHandler.saveTodoListInDb(dbHelper.getWritableDatabase(), defaultList);
-
+        //defaultList.setDummyList();
+        defaultList.setCreated();
+        defaultList.setName("default-list");
+        int error=DBQueryHandler.saveTodoListInDb(dbHelper.getWritableDatabase(), defaultList);
+        if(error==-1){
+            Log.i(TAG,"insert failed");
+        }
         if(activeList != -1) {
             showTasksOfList(activeList);
         }
@@ -814,10 +818,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             MenuItem item = navMenu.add(R.id.drawer_group2, id, 1, name);
             item.setCheckable(true);
             item.setIcon(R.drawable.ic_label_black_24dp);
-            ImageButton v = new ImageButton(this, null, R.style.BorderlessButtonStyle);
-            v.setImageResource(R.drawable.ic_delete_black_24dp);
-            v.setOnClickListener(new OnCustomMenuItemClickListener(help.get(i).getId(), name, MainActivity.this));
-            item.setActionView(v);
+            if(!name.equals("default-list")){
+                ImageButton v = new ImageButton(this, null, R.style.BorderlessButtonStyle);
+                v.setImageResource(R.drawable.ic_delete_black_24dp);
+                v.setOnClickListener(new OnCustomMenuItemClickListener(help.get(i).getId(), name, MainActivity.this));
+                item.setActionView(v);
+            }
+
 
         }
     }

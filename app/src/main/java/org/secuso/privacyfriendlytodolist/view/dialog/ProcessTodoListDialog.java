@@ -92,6 +92,7 @@ public class ProcessTodoListDialog extends FullScreenDialog {
                 if (changesMade(listName)) {
                     todoList.setName(listName);
                     callback.finish(todoList);
+                    System.out.println(todoList.getName());
                 }
                 self.dismiss();
             }
