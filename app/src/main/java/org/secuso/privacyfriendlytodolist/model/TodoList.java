@@ -42,8 +42,6 @@ public class TodoList extends BaseTodo implements Parcelable{
 
         id = parcel.readInt();
         name = parcel.readString();
-        System.out.println(id);
-        System.out.println(name);
         parcel.readList(tasks, TodoTask.class.getClassLoader());
     }
 

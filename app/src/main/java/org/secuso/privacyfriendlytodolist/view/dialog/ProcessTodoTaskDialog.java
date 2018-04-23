@@ -316,8 +316,10 @@ public class ProcessTodoTaskDialog extends FullScreenDialog {
             if (item.getItemId()-3 == tl.getId()){
                 this.selectedListID = tl.getId();
                 listSelector.setText(tl.getName());
+                System.out.println(tl.getId() + tl.getName());
             } else if (item.getTitle() == getContext().getString(R.string.to_choose_list)){
-                this.selectedListID = -3;
+                this.selectedListID = 1;
+
             }
         }
 
@@ -348,8 +350,7 @@ public class ProcessTodoTaskDialog extends FullScreenDialog {
                 selectedListID = tl.getId();
             }else if (!idExists){
                 //listSelector.setText(getContext().getString(R.string.click_to_choose));
-                listSelector.setText("default-list");
-                selectedListID = -3;
+                selectedListID = 1;
             }
         }
 

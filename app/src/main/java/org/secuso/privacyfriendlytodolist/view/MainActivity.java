@@ -259,7 +259,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         PrefManager prefManager = new PrefManager(this);
         if (prefManager.isFirstTimeLaunch()) {
-            prefManager.setFirstTimeValues(this);
             startTut();
             finish();
         }
@@ -302,12 +301,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         authAndGuiInit(savedInstanceState);
         TodoList defaultList = new TodoList();
-        //defaultList.setDummyList();
         defaultList.setCreated();
         defaultList.setName("default-list");
-        int error=DBQueryHandler.saveTodoListInDb(dbHelper.getWritableDatabase(), defaultList);
-        if(error==-1){
-            Log.i(TAG,"insert failed");
+        boolean result=sendToDatabase(defaultList);
+        if (result){
+            Log.i(TAG,"default list inserted succefully");
+        }
+        else{
+            Log.i(TAG,"default list insert failed");
         }
         if(activeList != -1) {
             showTasksOfList(activeList);
@@ -324,7 +325,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         outState.putParcelable(KEY_DUMMY_LIST, dummyList);
         outState.putBoolean(KEY_IS_UNLOCKED, isUnlocked);
         outState.putLong(KEY_UNLOCK_UNTIL, unlockUntil);
-        outState.putInt(KEY_ACTIVE_LIST, activeList);
     }
 
 
@@ -385,7 +385,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         dummyList = savedInstanceState.getParcelable(KEY_DUMMY_LIST);
         isUnlocked = savedInstanceState.getBoolean(KEY_IS_UNLOCKED);
         unlockUntil = savedInstanceState.getLong(KEY_UNLOCK_UNTIL);
-        activeList = savedInstanceState.getInt(KEY_ACTIVE_LIST);
+
     }
 
     public void initActivity(Bundle savedInstanceState) {
