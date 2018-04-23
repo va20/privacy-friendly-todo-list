@@ -112,6 +112,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     // Database administration
     private DatabaseHelper dbHelper;
 
+    private SharedPreferences mPref;
+
     // TodoList administration
     private ArrayList<TodoList> todoLists = new ArrayList<>();
     private TodoList dummyList; // use this list if you need a container for tasks that does not exist in the database (e.g. to show all tasks, tasks of today etc.)
@@ -137,7 +139,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private static final long UnlockPeriod = 30000; // keep the app unlocked for 30 seconds after switching to another activity (settings/help/about)
     int affectedRows;
     int notificationDone;
-
+    private int activeList = -1;
 
 
     @Override
@@ -166,6 +168,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 return false;
             }
         });
+
+        MenuItem priotiryGroup = menu.findItem(R.id.ac_group_by_prio);
+        priotiryGroup.setChecked(mPref.getBoolean("PRIORITY", false));
+
+        MenuItem deadlineGroup = menu.findItem(R.id.ac_sort_by_deadline);
+        deadlineGroup.setChecked(mPref.getBoolean("DEADLINE", false));
 
         return super.onCreateOptionsMenu(menu);
     }
@@ -200,24 +208,29 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             case R.id.ac_show_all_tasks:
                 expandableTodoTaskAdapter.setFilter(ExpandableTodoTaskAdapter.Filter.ALL_TASKS);
                 expandableTodoTaskAdapter.notifyDataSetChanged();
+                mPref.edit().putString("FILTER", "ALL_TASKS").commit();
                 return true;
             case R.id.ac_show_open_tasks:
                 expandableTodoTaskAdapter.setFilter(ExpandableTodoTaskAdapter.Filter.OPEN_TASKS);
                 expandableTodoTaskAdapter.notifyDataSetChanged();
+                mPref.edit().putString("FILTER", "OPEN_TASKS").commit();
                 return true;
             case R.id.ac_show_completed_tasks:
                 expandableTodoTaskAdapter.setFilter(ExpandableTodoTaskAdapter.Filter.COMPLETED_TASKS);
                 expandableTodoTaskAdapter.notifyDataSetChanged();
+                mPref.edit().putString("FILTER", "COMPLETED_TASKS").commit();
                 return true;
             case R.id.ac_group_by_prio:
                 checked = !item.isChecked();
                 item.setChecked(checked);
                 sortType = ExpandableTodoTaskAdapter.SortTypes.PRIORITY;
+                mPref.edit().putBoolean("PRIORITY", checked).commit();
                 break;
             case R.id.ac_sort_by_deadline:
                 checked = !item.isChecked();
                 item.setChecked(checked);
                 sortType = ExpandableTodoTaskAdapter.SortTypes.DEADLINE;
+                mPref.edit().putBoolean("DEADLINE", checked).commit();
                 break;
             default:
                 return super.onOptionsItemSelected(item);
@@ -246,6 +259,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         PrefManager prefManager = new PrefManager(this);
         if (prefManager.isFirstTimeLaunch()) {
+            prefManager.setFirstTimeValues(this);
             startTut();
             finish();
         }
@@ -270,7 +284,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         hints();
 
         dbHelper = DatabaseHelper.getInstance(this);
-        PreferenceManager.setDefaultValues(this, R.xml.settings, false);
+        mPref = PreferenceManager.getDefaultSharedPreferences(this);
 
         //Try to snooze the task by notification
         /*if (savedInstanceState == null) {
@@ -288,8 +302,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         authAndGuiInit(savedInstanceState);
         TodoList defaultList = new TodoList();
-        defaultList.setDummyList();
-        DBQueryHandler.saveTodoListInDb(dbHelper.getWritableDatabase(), defaultList);
+        //defaultList.setDummyList();
+        defaultList.setCreated();
+        defaultList.setName("default-list");
+        int error=DBQueryHandler.saveTodoListInDb(dbHelper.getWritableDatabase(), defaultList);
+        if(error==-1){
+            Log.i(TAG,"insert failed");
+        }
+        if(activeList != -1) {
+            showTasksOfList(activeList);
+        }
     }
 
 
@@ -302,6 +324,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         outState.putParcelable(KEY_DUMMY_LIST, dummyList);
         outState.putBoolean(KEY_IS_UNLOCKED, isUnlocked);
         outState.putLong(KEY_UNLOCK_UNTIL, unlockUntil);
+        outState.putInt(KEY_ACTIVE_LIST, activeList);
     }
 
 
@@ -349,7 +372,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         return true;
     }
 
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
 
+        restore(savedInstanceState);
+    }
+
+    private void restore(Bundle savedInstanceState) {
+        todoLists = savedInstanceState.getParcelableArrayList(KEY_TODO_LISTS);
+        clickedList = savedInstanceState.getParcelable(KEY_CLICKED_LIST);
+        dummyList = savedInstanceState.getParcelable(KEY_DUMMY_LIST);
+        isUnlocked = savedInstanceState.getBoolean(KEY_IS_UNLOCKED);
+        unlockUntil = savedInstanceState.getLong(KEY_UNLOCK_UNTIL);
+        activeList = savedInstanceState.getInt(KEY_ACTIVE_LIST);
+    }
 
     public void initActivity(Bundle savedInstanceState) {
 
@@ -538,6 +575,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     @Override
     protected void onResume() {
+        super.onResume();
+
         if (this.isInitialized && !this.isUnlocked && (this.unlockUntil == -1 || System.currentTimeMillis() > this.unlockUntil)) {
             // restart activity to show pin dialog again
             Intent intent = new Intent(this, MainActivity.class);
@@ -783,10 +822,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             MenuItem item = navMenu.add(R.id.drawer_group2, id, 1, name);
             item.setCheckable(true);
             item.setIcon(R.drawable.ic_label_black_24dp);
-            ImageButton v = new ImageButton(this, null, R.style.BorderlessButtonStyle);
-            v.setImageResource(R.drawable.ic_delete_black_24dp);
-            v.setOnClickListener(new OnCustomMenuItemClickListener(help.get(i).getId(), name, MainActivity.this));
-            item.setActionView(v);
+            if(!name.equals("default-list")){
+                ImageButton v = new ImageButton(this, null, R.style.BorderlessButtonStyle);
+                v.setImageResource(R.drawable.ic_delete_black_24dp);
+                v.setOnClickListener(new OnCustomMenuItemClickListener(help.get(i).getId(), name, MainActivity.this));
+                item.setActionView(v);
+            }
+
 
         }
     }

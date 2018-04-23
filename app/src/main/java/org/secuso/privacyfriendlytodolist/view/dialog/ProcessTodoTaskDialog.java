@@ -347,7 +347,8 @@ public class ProcessTodoTaskDialog extends FullScreenDialog {
                 listSelector.setText(tl.getName());
                 selectedListID = tl.getId();
             }else if (!idExists){
-                listSelector.setText(getContext().getString(R.string.click_to_choose));
+                //listSelector.setText(getContext().getString(R.string.click_to_choose));
+                listSelector.setText("default-list");
                 selectedListID = -3;
             }
         }
